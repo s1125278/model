@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Quick Draw 提示版</title>
+<meta name="description" content="像 Quick Draw 一樣畫圖讓 AI 猜，畫不出來時會給你繪圖提示。"/>
+<style>
+:root{--bg:#0f1419;--surface:#1a2332;--surface-2:#243044;--text:#e8eef7;--muted:#94a3b8;--accent:#38bdf8;--accent-2:#a78bfa;--success:#4ade80;--warn:#fbbf24;--radius:14px;font-family:"Segoe UI","Microsoft JhengHei",system-ui,sans-serif}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:flex;flex-direction:column;background:radial-gradient(ellipse at top,#1e293b 0%,var(--bg) 55%);color:var(--text)}
+a{color:var(--accent)}
+.header{text-align:center;padding:1rem 1rem .35rem;flex-shrink:0}
+.header h1{margin:0;font-size:clamp(1.5rem,4vw,2rem);background:linear-gradient(90deg,var(--accent),var(--accent-2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.tagline{color:var(--muted);margin:.35rem 0 0}
+.layout{display:grid;grid-template-columns:1fr min(300px,34%);gap:1rem;max-width:1100px;width:100%;margin:0 auto;padding:.75rem 1rem 1rem;flex:1;min-height:0;align-items:stretch}
+@media(max-width:820px){.layout{grid-template-columns:1fr;grid-template-rows:auto 1fr}}
+.panel{background:var(--surface);border:1px solid var(--surface-2);border-radius:var(--radius);padding:1rem;min-height:0}
+.game-panel{display:flex;flex-direction:column}
+.side-panel{display:flex;flex-direction:column;padding:0;overflow:hidden;max-height:calc(100vh - 7.5rem)}
+.side-scroll{flex:1;overflow-y:auto;padding:1rem 1rem .5rem;min-height:0}
+.side-heading{margin:0 0 .5rem;font-size:1rem}
+.game-dock{flex-shrink:0;padding:.85rem 1rem 1rem;border-top:1px solid var(--surface-2);background:#151d2a;border-radius:0 0 var(--radius) var(--radius)}
+.game-dock .status,.game-dock .loading{margin:.4rem 0 0;line-height:1.4}
+.game-dock .loading{margin-top:.25rem;font-size:.8rem}
+.hud{display:flex;justify-content:space-between;align-items:center;gap:1rem;margin-bottom:.75rem}
+.word{font-size:1.35rem;font-weight:700}
+.hud-right{display:flex;align-items:baseline;gap:.35rem .75rem}
+.label{color:var(--muted);font-size:.8rem}
+.timer{font-size:1.5rem;font-weight:700;color:var(--warn);min-width:2ch}
+.score{font-size:1.25rem;font-weight:700;color:var(--success)}
+.canvas-wrap{background:#fff;border-radius:10px;overflow:hidden;touch-action:none;flex:1;min-height:200px}
+#draw-canvas{display:block;width:100%;cursor:crosshair}
+.controls{display:flex;flex-wrap:wrap;gap:.45rem}
+.game-dock .btn{flex:1 1 auto;min-width:5.5rem;padding:.6rem .75rem;font-size:.9rem}
+.btn{border:none;border-radius:10px;padding:.55rem 1rem;font-size:.95rem;cursor:pointer;background:var(--surface-2);color:var(--text)}
+.btn.primary{background:linear-gradient(135deg,#0ea5e9,#6366f1);color:#fff;font-weight:600}
+.btn.ghost{background:transparent;border:1px solid var(--surface-2)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.status,.loading{color:var(--muted);font-size:.85rem}
+.model-preview-wrap{margin-bottom:.75rem;text-align:center}
+#model-preview{display:block;margin:0 auto;width:84px;height:84px;image-rendering:pixelated;background:#fff;border:2px solid var(--surface-2);border-radius:6px}
+.model-preview-caption{margin:.35rem 0 0;font-size:.75rem;color:var(--muted)}
+.predictions{display:flex;flex-direction:column;gap:.35rem;min-height:3rem;margin-bottom:.5rem}
+.pred{background:var(--surface-2);padding:.4rem .6rem;border-radius:8px;font-size:.9rem}
+.pred-target{outline:2px solid var(--accent)}
+.hint-box{margin-top:1rem;padding:.75rem;background:#422006;border:1px solid #b45309;border-radius:10px}
+.hint-box h2{color:var(--warn);margin:0 0 .35rem;font-size:.95rem}
+.hint-figure{margin:0 0 .6rem;text-align:center}
+.hint-image{display:block;margin:0 auto;width:160px;height:160px;background:#fff;border-radius:8px;border:1px solid #92400e}
+.hint-step-label{margin:.35rem 0 0;font-size:.8rem;color:#fcd34d}
+.hint-box p{margin:0;line-height:1.5}
+.info-details{margin-top:.75rem;color:var(--muted);font-size:.82rem;border-top:1px solid var(--surface-2);padding-top:.65rem}
+.info-details summary{cursor:pointer;color:var(--text);font-weight:600;list-style:none}
+.info-details summary::-webkit-details-marker{display:none}
+.info-details summary::before{content:"▸ ";color:var(--accent)}
+.info-details[open] summary::before{content:"▾ "}
+.info-details ul{padding-left:1.1rem;margin:.5rem 0 0}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);place-items:center;padding:1rem;z-index:10;display:none}
+.overlay:not([hidden]){display:grid}
+.overlay-card{background:var(--surface);border-radius:var(--radius);padding:1.5rem;max-width:360px;text-align:center;border:1px solid var(--surface-2)}
+.footer{text-align:center;color:var(--muted);font-size:.75rem;padding:.5rem 1rem .75rem;flex-shrink:0}
+@media(max-width:820px){
+  .side-panel{max-height:none;padding-bottom:0}
+  .game-dock{position:fixed;right:0;bottom:0;left:0;z-index:8;border-radius:var(--radius) var(--radius) 0 0;border-top:1px solid var(--accent);box-shadow:0 -8px 28px rgba(0,0,0,.45);padding:.75rem 1rem calc(.75rem + env(safe-area-inset-bottom,0px))}
+  .side-scroll{padding-bottom:7.5rem}
+  .footer{padding-bottom:6.5rem}
+}
+</style>
+<script>
+window.addEventListener("error",e=>{const el=document.getElementById("loading");if(el)el.textContent="腳本錯誤："+(e.message||"未知錯誤");});
+window.addEventListener("unhandledrejection",e=>{const el=document.getElementById("loading");if(el)el.textContent="載入失敗："+(e.reason?.message||String(e.reason));});
+</script>
+<script src="vendor/onnxruntime-web/ort.min.js"></script>
+<script>
+if(window.ort){ort.env.wasm.wasmPaths=new URL("vendor/onnxruntime-web/",document.baseURI).href;ort.env.wasm.numThreads=1;ort.env.logLevel="error";}
+</script>
+</head>
+<body>
+<header class="header">
+  <h1>Quick Draw 提示版</h1>
+  <p class="tagline">畫出題目讓 AI 猜；卡關時會提示你怎麼畫。</p>
+</header>
+<main class="layout">
+  <section class="panel game-panel">
+    <div class="hud">
+      <div id="word" class="word">載入中…</div>
+      <div class="hud-right">
+        <span class="label">時間</span><span id="timer" class="timer">25</span>
+        <span class="label">得分</span><span id="score" class="score">0</span>
+      </div>
+    </div>
+    <div class="canvas-wrap"><canvas id="draw-canvas" aria-label="畫布"></canvas></div>
+  </section>
+  <aside class="panel side-panel">
+    <div class="side-scroll">
+      <h2 class="side-heading">AI 猜測</h2>
+      <div class="model-preview-wrap">
+        <canvas id="model-preview" width="84" height="84" aria-label="AI 看到的圖"></canvas>
+        <p class="model-preview-caption">AI 看到的圖（28×28 縮圖）</p>
+      </div>
+      <div id="predictions" class="predictions"></div>
+      <div id="hint-box" class="hint-box" hidden>
+        <h2>繪圖提示</h2>
+        <figure class="hint-figure">
+          <img id="hint-image" class="hint-image" alt="參考畫法示意圖" width="160" height="160"/>
+          <figcaption id="hint-step-label" class="hint-step-label">步驟 1</figcaption>
+        </figure>
+        <p id="hint-text"></p>
+      </div>
+      <details class="info-details">
+        <summary>怎麼玩？</summary>
+        <ul>
+          <li>按右下方「開始回合」會隨機出題（共 18 類）。</li>
+          <li>在左側畫布畫出題目，線條清楚即可。</li>
+          <li>AI 約每 1 秒辨識；上方小圖是 AI 實際看到的畫面。</li>
+          <li>畫太久或不像時，會出現分步提示與示意圖。</li>
+        </ul>
+      </details>
+    </div>
+    <div class="game-dock" aria-label="遊戲控制">
+      <div class="controls">
+        <button id="start-btn" type="button" class="btn primary">開始回合</button>
+        <button id="clear-btn" type="button" class="btn">清除</button>
+        <button id="skip-btn" type="button" class="btn ghost">放棄</button>
+      </div>
+      <p id="status" class="status">正在載入模型…</p>
+      <p id="loading" class="loading">載入 ONNX 模型中…</p>
+    </div>
+  </aside>
+</main>
+<div id="overlay" class="overlay" hidden>
+  <div class="overlay-card">
+    <h2 id="overlay-title">結果</h2>
+    <p id="overlay-msg"></p>
+    <button id="overlay-btn" type="button" class="btn primary">再玩一局</button>
+  </div>
+</div>
+<footer class="footer">
+  <p>使用 <a href="https://github.com/googlecreativelab/quickdraw-dataset" target="_blank" rel="noreferrer">Quick Draw</a> 資料集在本機訓練</p>
+</footer>
+<script type="module" src="app.js"></script>
+</body>
+</html>
