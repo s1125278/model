@@ -330,6 +330,12 @@ function adjustLogits(logits, categories, shape, target) {
     out[cloudI]+=2.2;
     if(sunI>=0)out[sunI]-=1.0; if(flowerI>=0)out[flowerI]-=0.8; if(catI>=0)out[catI]-=0.8;
   }
+  // 魚：無條件給基礎 boost
+  const fishI=idx("fish");
+  if (fishI>=0 && target==="fish") {
+    out[fishI]+=2.2;
+    if(catI>=0)out[catI]-=0.8; if(dogI>=0)out[dogI]-=0.8; if(cloudI>=0)out[cloudI]-=0.6;
+  }
   if (treeI>=0&&flowerI>=0) {
     if (target==="tree"&&shape.trunkScore>=0.30) { out[treeI]+=1.8; out[flowerI]-=1.2; }
     else if (target==="tree"&&shape.flowerLike>=0.40&&shape.trunkScore<0.25) out[flowerI]+=0.4;
